@@ -2,12 +2,19 @@
 #include <utility>
 
 
+// Реализовано с помощью 2-3 дерева с асимптотикой O(log n) на добавление, удаление поиск
+//   источник: http://neerc.ifmo.ru/wiki/index.php?title=2-3_дерево
+
+// Каждый объект Set отвечает за свою вершину дерева, публично доступен только корень
+
+// Для удобства реализации и работы в дереве всегда хранится ровно один фиктивный лист, который является 
+//   максимальным и последниим в списке листов. На него указывает итератор end
+//   (Значение в этом листе не обязательно максимальное, но из-за особеностей реализации это не учитывается)
+
 template<class ValueType> 
 class Set {
-
-// Реализовано с помощью 2-3 дерева с асимптотикой O(log n) на добавление, удаление поиск
 public:
-    Set(): Set(1) {}
+    Set(): Set(1) {} // используется констурктор Set(bool) (его описание есть ниже)
 
     template<typename Iter>
     Set(Iter begin_it, Iter end_it): Set(1) {
@@ -27,6 +34,8 @@ public:
         next(other.next),
         prev(other.prev),
         son(other.son),
+        left_leaf(other.left_leaf),
+        right_leaf(other.right_leaf),
         val(other.val),
         sz(other.sz) {}
 
@@ -36,9 +45,11 @@ public:
         std::swap(next, help.next);
         std::swap(prev, help.prev);
         std::swap(son, help.son);
+        std::swap(left_leaf, help.left_leaf);
+        std::swap(right_leaf, help.right_leaf);
         std::swap(val, help.val);
         std::swap(sz, help.sz);
-        upd(this);
+        update(this);
         return *this;
     }
 
@@ -47,9 +58,11 @@ public:
         std::swap(next, other.next);
         std::swap(prev, other.prev);
         std::swap(son, other.son);
+        std::swap(left_leaf, other.left_leaf);
+        std::swap(right_leaf, other.right_leaf);
         std::swap(val, other.val);
         std::swap(sz, other.sz);
-        upd(this);
+        update(this);
         return *this;
     }
 
@@ -63,12 +76,14 @@ public:
     }
 
     size_t size() const {
-        // Возвращает количество добавленных элементов
+        // Возвращает количество листов (не считая фиктиивного)
+        //   т.е. возвращает число элементов во множестве
         return sz;
     }
 
     bool empty() const {
-        // Проверяет что не добавленно нии одного элемента
+        // Проверяет что есть только один лист (фиктивный)
+        //   т.е. проверяет что нет ни одного элемента во множестве
         return sz == 0;
     }
 
@@ -87,8 +102,7 @@ public:
             curr->prev = add;
             if (add->prev != nullptr) {
                 add->prev->next = add;
-            }
-            else {
+            } else {
                 add->father->son = add;
             }
             // Перестраивает дерево
@@ -112,8 +126,7 @@ public:
             // Перестраивает дерево
             if (curr->prev != nullptr) {
                 curr->prev->go_up();
-            }
-            else {
+            } else {
                 curr->father->son = curr->next;
                 curr->next->go_up();
             }
@@ -127,7 +140,7 @@ public:
     public:
         iterator(): curr(nullptr) {}
 
-        iterator(const Set *s): curr(s) {}
+        iterator(const Set* s): curr(s) {}
 
         iterator(const Set<ValueType>::iterator &x): curr(x.curr) {}
 
@@ -187,30 +200,17 @@ public:
         }
 
     private:
-        const Set *curr;
+        const Set* curr;
     };
 
     iterator begin() const {
         // Возвращает итератор на минимальный элемент
-        auto curr = this;
-        while (curr->son != nullptr) {
-            curr = curr->son;
-        }
-        return iterator(curr);
+        return iterator(left_leaf);
     }
 
     iterator end() const {
         // Возвращает итератор на последний (фиктивный) лист
-        auto curr = this;
-        while (curr->son != nullptr || curr->next != nullptr) {
-            if (curr->next != nullptr) {
-                curr = curr->next;
-            }
-            else {
-                curr = curr->son;
-            }
-        }
-        return iterator(curr);
+        return iterator(right_leaf);
     }
 
     iterator find(const ValueType &v) const {
@@ -218,8 +218,7 @@ public:
         auto curr = get_val_leaf(v);
         if (curr->val < v || v < curr->val) {
             return end();
-        }
-        else {
+        } else {
             return iterator(curr);
         }
     }
@@ -232,35 +231,42 @@ public:
 
 private:
 
-// Каждый объект Set отвечает за свою вершину дерева, публично доступен только корень
-
-// Для удобства реализации и работы в дереве всегда хранится ровно один фиктивный лист, который является 
-//    максимальным и последниим в списке листов. На него указывает итератор end
-//   (Значение в этом листе не обязательно максимальное, но из-за особеностей реализации это не учитывается)
-
-    Set<ValueType> *father; // Указатель на отца в дереве (nullptr если данная вершина - корень)
-    Set<ValueType> *next; // Указатель на следующего (правого) брата (сына отца) в дерева (nullptr если такого нет)
-    Set<ValueType> *prev; // Указатель на предыдущего (левого) брата (сына отца) в дерева (nullptr если такого нет)
-    Set<ValueType> *son; // Указатель на первого слева (с минимальным значением) сына в дереве
+    Set<ValueType>* father; // Указатель на отца в дереве (nullptr если данная вершина - корень)
+    Set<ValueType>* next; // Указатель на следующего (правого) брата (сына отца) в дерева (nullptr если такого нет)
+    Set<ValueType>* prev; // Указатель на предыдущего (левого) брата (сына отца) в дерева (nullptr если такого нет)
+    Set<ValueType>* son; // Указатель на первого слева (с минимальным значением) сына в дереве
+    Set<ValueType>* left_leaf; // Указатель на самого левого (минимального по значению) листа в поддереве
+    Set<ValueType>* right_leaf; // Указатель на самого правого (максимального по значению) листа в поддереве
 
     ValueType val; // Значение в вершине если это лист, иначе значение максимального листа в поддереве
 
     size_t sz; // Количество листов в поддереве, не считая фиктивный лист
 
-    Set(const Set<ValueType> *other, Set<ValueType> *new_father, Set *new_prev):
+    Set(const Set<ValueType>* other, Set<ValueType>* new_father, Set* new_prev):
         father(new_father), prev(new_prev), val(other->val), sz(other->sz) {
         // Конструктор копирования other, если уже заинициализирован отец и предыдущий брат
-        if (other->next == nullptr) {
-            next = nullptr;
-        }
-        else {
-            next = new Set(other->next, new_father, this);
-        }
+        // При построении так же инициализирует right_leaf у father если тот не nullptr
+
+        // Проверяет что у other есть сын. В этом случае копирует поддерево вершины other в качестве своего поддерева.
+        //   В процессе этого инициализирует left_leaf и при копировании поддерева инициализируется right_leaf
         if (other->son == nullptr) {
             son = nullptr;
-        }
-        else {
+            left_leaf = this;
+            right_leaf = this;
+        } else {
             son = new Set(other->son, this, nullptr);
+            left_leaf = son->left_leaf;
+        }
+
+        // В случае если у вершины next=nullptr это значит что вершины самый правый сын отца. 
+        //   Тогда у отца можно заиниициализировать right_leaf как right_leaf у текущей вершины
+        if (other->next == nullptr) {
+            next = nullptr;
+            if (new_father != nullptr) {
+                new_father->right_leaf = right_leaf;
+            }
+        } else {
+            next = new Set(other->next, new_father, this);
         }
     }
 
@@ -274,10 +280,13 @@ private:
         //   и если hasson = 0 создаёт одиночную вершину дерева
         if (!hasson) {
             son = nullptr;
-        }
-        else {
+            left_leaf = this;
+            right_leaf = this;
+        } else {
             son = new Set(0);
             son->father = this;
+            left_leaf = son;
+            right_leaf = son;
         }
     }
 
@@ -333,15 +342,17 @@ private:
         return curr;
     }
 
-    void upd(Set<ValueType> *s) {
+    void update(Set<ValueType>* s) {
         // Пересчитывает параметры val и sz у вершины, а так же всем её детям присваивает в отца указатель на себя
         auto curr = s->son;
         s->sz = 0;
+        s->left_leaf = curr->left_leaf;
         while (curr->next != nullptr) {
             s->sz += curr->sz;
             curr->father = s;
             curr = curr->next;
         }
+        s->right_leaf = curr->right_leaf;
         s->sz += curr->sz;
         curr->father = s;
         s->val = curr->val;
@@ -362,12 +373,11 @@ private:
                     // Так как там, где используется Set, хранится указатель на корень, то сам корень удалять нельзя
                     //   Поэтому все параметры текущей вершины перемещаются в старый корень, а сама она удаляется
                     father->son = son;
-                    upd(father);
+                    update(father);
                     son = nullptr;
                     delete this;
-                }
-                else { // Случай когда текущая вершина - единственный лист и сын корня
-                    upd(father);
+                } else { // Случай когда текущая вершина - единственный лист и сын корня
+                    update(father);
                 }
                 return;
             }
@@ -384,8 +394,7 @@ private:
                 son2->prev = this;
                 son1->next = son2;
                 son2 = son2->go_right();
-            }
-            else {
+            } else {
                 father1 = father->prev;
                 father2 = father;
                 son1 = father1->son->go_right();
@@ -406,9 +415,8 @@ private:
                 father2->next = nullptr;
                 father2->son = nullptr;
                 delete father2;
-                upd(father1);
-            }
-            else { // Случай когда у father1 и father2 было 4 детей (больше не может быть)
+                update(father1);
+            } else { // Случай когда у father1 и father2 было 4 детей (больше не может быть)
                 // В этом случае объединённые списки детей делятся на 2 равные части по 2 ребёнка
                 //   Первый становится списком детей father1, второй - списком детей father2
                 son1 = son1->next;
@@ -416,12 +424,11 @@ private:
                 son1->next = nullptr;
                 son2->prev = nullptr;
                 father2->son = son2;
-                upd(father2);
-                upd(father1);
+                update(father2);
+                update(father1);
             }
             father1->go_up();
-        }
-        else if (c > 3) { // Случай когда число братьев больше 3 (т.е. равно 4)
+        } else if (c > 3) { // Случай когда число братьев больше 3 (т.е. равно 4)
             // father1 - отец текущей вершины, создаётся его новый правый брат father2.
             //   Список детей father1 делится на 2 части по 2 и подвешивается к father1 и father2
             auto son2 = go_right();
@@ -439,25 +446,23 @@ private:
             if (father2->next != nullptr) {
                 father2->next->prev = father2;
             }
-            upd(father1);
-            upd(father2);
+            update(father1);
+            update(father2);
             father1->go_up();
-        }
-        else if (c > 1 && father == nullptr) { // Случай когда у корня создался брат
+        } else if (c > 1 && father == nullptr) { // Случай когда у корня создался брат
             // В этом случае создаётся новая вершина, куда копируются все параметры текущей, а текущая вершина 
             //   становится корнем и её дети - новая вершина и её старый брат
             auto curr = new Set(0);
             std::swap(curr->next, next);
             std::swap(curr->prev, prev);
             std::swap(curr->son, son);
-            upd(curr);
+            update(curr);
             curr->father = this;
             curr->next->prev = curr;
             son = curr;
-            upd(this);
-        }
-        else { // Никаких особых случаев, обновляется текущая и перестраивается дерево сверху над ней
-            upd(father);
+            update(this);
+        } else { // Никаких особых случаев, обновляется текущая и перестраивается дерево сверху над ней
+            update(father);
             father->go_up();
         }
     }
